@@ -1,5 +1,7 @@
 ----
 # rbr
--- a room builder for an upcoming project
----- testing of rbr is done in a terminal with 45 Lines and 207 Columns
-----
+- a room builder for an upcoming project
+## notes
+- testing of rbr is done in a terminal with 45 lines and 207 columns
+- the ptui library is a submodule of this repo, to clone correctly run git with the '--recursive' flag 
+
