@@ -1,6 +1,14 @@
 #!/bin/sh
-. ./ptui/ptui
+. ${ptuiPath:-./ptui/ptui}
+# this script ($0) should be sourced and used like a lib
 IFS=""
+rparse() { # work with the below mparse() using recursing to combine all of $@
+  unset out
+  for i in "$@"; do
+    out=$(mparse "$out" "$1")
+    shift 1
+  done; echo "$out"
+}
 mparse() { # multiroom parse
   sa="$2"
   IFS=$(printf '\n\b')
@@ -10,25 +18,13 @@ mparse() { # multiroom parse
       shift 1
       : $((n-=1))
     }
-    printf '%s\n' $two$(eval "printf '%s\n' \$$n")
+    printf '%s\n' $(eval "printf '%s\n' \$$n")$two
   done << EOF
 $(printf '%s\n' "$sa")
 EOF
-# this actually works for 2 rooms at once 
 }
-froom() { # first room
-  ex="                                         "
-  hline 46 - 0
-  echo
-  dvline 1 0 '|' 44 "$(./ptui/ptui hline 44 -)" 1 0
-  dvline 1 0 '|' 44 "$(./ptui/ptui hline 44 -)" 1 0
-  dvline 3 0 '|||||' 36
-  hline 5 '|' 0; echo "$ex"                                 
-  hline 5 '|' 0; echo "$ex"
-  hline 5 '|' 0; echo "$ex"
-  dvline 3 0 '|||||' 36
-  dvline 1 0 '|' 44 "$(./ptui/ptui hline 44 -)" 1 0 
-  dvline 1 0 '|' 44 "$(./ptui/ptui hline 44 -)" 1 0
-  hline 46 - 0
-  echo
-}
+# index of some assests
+wall=$(vline 3 0 '||') # 3x2 block of |'s
+door=$(vline 3 1 '#') # 3x1 block of #'s 
+corner=$(vline 2 0 '++') # 2x2 block of +'s
+topwall=$(vline 2 0 '====') # 2x4 block of ='s # rparse

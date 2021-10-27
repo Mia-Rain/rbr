@@ -1,6 +1,6 @@
 ----
 # rbr
-- a room builder for an upcoming project
+- a room builder for the upcoming mia roguelike
 ## notes
 - testing of rbr is done in a terminal with 45 lines and 207 columns
 - the ptui library is a submodule of this repo, to clone correctly run git with the '--recursive' flag 
