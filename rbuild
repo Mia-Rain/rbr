@@ -27,4 +27,15 @@ EOF
 wall=$(vline 3 0 '||') # 3x2 block of |'s
 door=$(vline 3 1 '#') # 3x1 block of #'s 
 corner=$(vline 2 0 '++') # 2x2 block of +'s
-topwall=$(vline 2 0 '====') # 2x4 block of ='s # rparse
+topwall=$(vline 2 0 '===') # 2x3 block of ='s # rparse
+avatar="${avatar:-M}" # the default av is a literal `M`
+. ./env # env file is used for various rendering data as well as the term size # user should manually configure this
+IFS="x"; set -- ${MAX_ROOM_SIZE}; ST="$1"; SW="$2" # ST=SectorsTall SW=SectorsWide; 1 sector is 3 lines by 3 columns
+until [ "$((LINES%3))" -eq 0 ]; do
+  : $((LINES-=1))
+done
+until [ "$((COLUMNS%3))" -eq 0 ]; do 
+  : $((COLUMNS-=1))
+done # make the precevied term size smaller until it is a multiple of 3
+MST="$((LINES/3))"; MSW="$((COLUMNS/3))" # MST=MaxSectorsTall MSW=MaxSectorsWide
+

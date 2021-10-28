@@ -1,0 +1,7 @@
+#!/bin/sh
+# set various varibles
+MAX_ROOM_SIZE="10x30" # max size of room # TxW ; LxC
+# should be in sectors; 1 sector is 3 lines by 3 columns
+# default value is 10x30; 30 Lines by 90 Columns
+COLUMNS=207 # should be configured by user
+LINES=45 # should be configured by user
