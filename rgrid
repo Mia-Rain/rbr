@@ -1,0 +1,18 @@
+#!/bin/sh
+. ${RPATH:-.}/rbase # pull in the base values
+. ${RPATH:-.}/env
+. ${PPATH:-.}/ptui # s() is set within ptui
+# some example code for producing an empty list
+# for i in $(seq $LINES); do
+#   for i in $(seq $COLUMNS); do
+#     print ' '
+#   done; echo
+# done
+# 
+# use psh-prng to generate a number lower than $LINES 
+[ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 is for rgrid errors
+for l in $(s 1 $LINES); do # for each line
+  for c in $(s 1 $COLUMNS); do # left to right across screen
+  done
+  # increment a count for $ML
+done # this prob makes mparse/rparse obsolete lmao
