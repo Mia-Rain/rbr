@@ -2,17 +2,40 @@
 . ${RPATH:-.}/rbase # pull in the base values
 . ${RPATH:-.}/env
 . ${PPATH:-.}/ptui # s() is set within ptui
-# some example code for producing an empty list
+# some example code for producing an empty screen
 # for i in $(seq $LINES); do
 #   for i in $(seq $COLUMNS); do
 #     print ' '
 #   done; echo
 # done
-# 
-# use psh-prng to generate a number lower than $LINES 
+#
+
+# L = lines; C = COLUMNS
+listr() { # create a new list with the name $3 using the items in $2; MUST not contain $1
+  eval $(printf 'unset %s' "$3") # unset variable in $3
+  for i in ${2}; do
+    [ "$i" != "$1" ] && {
+      eval $(printf '%s=%s%s$%s' "$3" "$i" "$4"  "$3") # typelist=$i;$typelist # ?
+    } # $4 is what to seperate by
+  done
+  unset IFS # IFS should be set before calling
+  # unset to prevent later issues
+} # remove an item from 
 [ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 is for rgrid errors
 for l in $(s 1 $LINES); do # for each line
   for c in $(s 1 $COLUMNS); do # left to right across screen
+  # basically the idea here is have a list of all possible things a 1x1 space can be
+  # wall,door,blank,etc; these are ofc effected by the blocks around them and the current pos
+  # basically use ran() and some pain to have it pick what a block should be
+  # the list should be dynamic based on the pos and blocks around it
+  # ie; placing a door when there is no where for it to lead makes no sense
+  typelist="wall;door;topwall;corner" # these are set in rbase
+  # use IFS=;
+  [ "$c" -le 3 -a "$l" -gt 1 ] && { # must be at least 3 over on C to create a door
+    # must also be at least 1 L down; this should also be effected by the surrounding blocks
+    IFS=';'
+    listr "door" "${typelist}" "typelist" ";"
+  }
   done
-  # increment a count for $ML
+  # increment a count for $ML and $MC somewhere
 done # this prob makes mparse/rparse obsolete lmao
