@@ -1,7 +1,6 @@
 #!/bin/sh
 . ${RPATH:-.}/rbase # pull in the base values
 . ${RPATH:-.}/env
-. ${PPATH:-.}/ptui # s() is set within ptui
 # some example code for producing an empty screen
 # for i in $(seq $LINES); do
 #   for i in $(seq $COLUMNS); do
@@ -10,32 +9,73 @@
 # done
 #
 
-# L = lines; C = COLUMNS
-listr() { # create a new list with the name $3 using the items in $2; MUST not contain $1
-  eval $(printf 'unset %s' "$3") # unset variable in $3
-  for i in ${2}; do
-    [ "$i" != "$1" ] && {
-      eval $(printf '%s=%s%s$%s' "$3" "$i" "$4"  "$3") # typelist=$i;$typelist # ?
-    } # $4 is what to seperate by
+s() { # s acts as seq replacement
+  n=$(($1)); while [ "$n" -le $(($2)) ]; do
+    echo "$n"; : $((n+=1))
   done
+}
+
+agrid() { # find the elements around $1 based on its pos ($l&$c)
+  :
+}
+# L = lines; C = COLUMNS
+listr() { # create a new typelist using the items in $2; MUST not contain $1
+  unset typelist
+  n=0; for i in ${2}; do
+    : $((n+=1))
+    [ "$i" != "$1" ] && {
+      typelist="${typelist+$typelist$3}$i"
+    }
+  done
+  tln=$((n-1))
   unset IFS # IFS should be set before calling
   # unset to prevent later issues
-} # remove an item from 
-[ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 is for rgrid errors
+} # remove an item from typelist
+
+listS(){ # return a number that determines the legth of the number of items
+  IFS="${2:-;}"
+  n=0; for i in ${1:-${typelist}}; do
+    : $((n+=1))
+  done
+  unset IFS
+  echo "${#n}"
+}
+# if there are 4 items in $1/$typelist this will return `1`
+
+[ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 will be for rgrid errors
+unset IFS
 for l in $(s 1 $LINES); do # for each line
   for c in $(s 1 $COLUMNS); do # left to right across screen
-  # basically the idea here is have a list of all possible things a 1x1 space can be
-  # wall,door,blank,etc; these are ofc effected by the blocks around them and the current pos
-  # basically use ran() and some pain to have it pick what a block should be
-  # the list should be dynamic based on the pos and blocks around it
-  # ie; placing a door when there is no where for it to lead makes no sense
-  typelist="wall;door;topwall;corner" # these are set in rbase
-  # use IFS=;
-  [ "$c" -le 3 -a "$l" -gt 1 ] && { # must be at least 3 over on C to create a door
-    # must also be at least 1 L down; this should also be effected by the surrounding blocks
-    IFS=';'
-    listr "door" "${typelist}" "typelist" ";"
-  }
+    typelist="wall;door;topwall;corner;blank" # these are set in rbase
+    tln=5 # $tln is the number of items in typelist
+    # basically the idea here is have a list of all possible things a 1x1 space can be
+    # wall,door,blank,etc; these are ofc effected by the blocks around them and the current pos
+    # basically use ran() and some pain to have it pick what a block should be
+    # the list should be dynamic based on the pos and blocks around it
+    # ie; placing a door when there is no where for it to lead makes no sense
+    [ "$c" -le 3 -o "$l" -lt 2 ] && { # must be at least 3 over on C to create a door
+      # must also be at least 1 L down; this should also be effected by the surrounding blocks
+      IFS=';'
+      listr "door" "${typelist}" ";"
+    }
+    # now use ran to generate a random number
+    # $((ran*ran))
+    ran=0; until [ "$ran" -gt 0 -a "$ran" -eq "$ran" -a "$ran" -le "$tln" ]; do
+      ran=$(( $(${RPATH:-.}/rng/ran)*$(${RPATH:-.}/rng/ran) ))
+      until [ "${#ran}" -le $(listS)  ]; do
+        ran=${ran%?}
+      done # shorten $ran until it is the length of the number of items in $typelist
+    done
+    #echo "$tln | $ran"
+    IFS=";"
+    n=0; for i in ${typelist}; do
+      : $((n+=1))
+      [ "$n" -eq "$ran" ] && {
+        eval $(printf "printf '%%s' \"$%s\"" "$i")
+        break
+      }
+    done; unset IFS # now select the item and print it
   done
+  echo
   # increment a count for $ML and $MC somewhere
 done # this prob makes mparse/rparse obsolete lmao
