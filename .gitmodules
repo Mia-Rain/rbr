@@ -1,7 +1,3 @@
-[submodule "psh-tui"]
-	path = ptui
-	url = https://git.unix.lgbt/Mia/ptui
-	branch = head
 [submodule "rng"]
   path = rng
   url = https://git.unix.lgbt/Mia/psh-prng

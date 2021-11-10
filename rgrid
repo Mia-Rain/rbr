@@ -1,6 +1,7 @@
 #!/bin/sh
 . ${RPATH:-.}/rbase # pull in the base values
 . ${RPATH:-.}/env
+
 # some example code for producing an empty screen
 # for i in $(seq $LINES); do
 #   for i in $(seq $COLUMNS); do
@@ -14,9 +15,45 @@ s() { # s acts as seq replacement
     echo "$n"; : $((n+=1))
   done
 }
-
-agrid() { # find the elements around $1 based on its pos ($l&$c)
-  :
+listgen(){ # generate typelist
+  unset typelist
+  types="door;wall;topwall;corner;blank" # these are all the defined types
+  ndoor="2"
+  nwall="3"
+  ntopwall="3"
+  ncorner="4" # corners should be more likely than walls
+  nblank="8" # blank space should be the most likely
+  
+  # how many times they /SHOULD/ appear in the list
+  IFS=";"; tln=0; for i in ${types}; do # produce a number stating how many should be in the list
+    : $((tln+=$(printf 'n%s' "$i")))
+  done
+  unset IFS
+  for i in $(s 1 ${tln}); do
+    ran=6;
+    until [ "$ran" -le 5 ]; do
+      ran=$(${RPATH:-.}/rng/ran)
+      until [ "${#ran}" -eq 1 ]; do
+        ran="${ran%?}"
+      done
+    done
+    n=0; IFS=";"; for i in ${types}; do
+      : $((n+=1))
+      [ "$n" -eq "$ran" ] && {
+        unset IFS
+        eval $(printf 'typelist="${typelist+$typelist;}%s"' "$i")
+      }
+    done 
+  done
+  unset IFS
+}
+sgrid() { # print $1 while saving it to a grid state file
+  printf '%s' "$1"
+  [ "$2" -gt 1 ] && {
+    printf '%s' "$1" >> grid.state 
+  } || { # >>
+    printf '%s' "$1" > grid.state
+  } # > 
 }
 # L = lines; C = COLUMNS
 listr() { # create a new typelist using the items in $2; MUST not contain $1
@@ -44,25 +81,32 @@ listS(){ # return a number that determines the legth of the number of items
 
 [ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 will be for rgrid errors
 unset IFS
-for l in $(s 1 $LINES); do # for each line
-  for c in $(s 1 $COLUMNS); do # left to right across screen
-    typelist="wall;door;topwall;corner;blank" # these are set in rbase
-    tln=5 # $tln is the number of items in typelist
+ml=0; for l in $(s 1 $LINES); do # for each line
+  mc=0; for c in $(s 1 $COLUMNS); do # left to right across screen
+    listgen # generate the typelist
+    #echo "$typelist"
     # basically the idea here is have a list of all possible things a 1x1 space can be
     # wall,door,blank,etc; these are ofc effected by the blocks around them and the current pos
     # basically use ran() and some pain to have it pick what a block should be
     # the list should be dynamic based on the pos and blocks around it
     # ie; placing a door when there is no where for it to lead makes no sense
+
     [ "$c" -le 3 -o "$l" -lt 2 ] && { # must be at least 3 over on C to create a door
       # must also be at least 1 L down; this should also be effected by the surrounding blocks
       IFS=';'
       listr "door" "${typelist}" ";"
     }
+
+    #[ "$mc" -eq "$MC" ] && {
+    #  listr "topwall" "${typelist}" ";"
+    #}
+
     # now use ran to generate a random number
     # $((ran*ran))
     ran=0; until [ "$ran" -gt 0 -a "$ran" -eq "$ran" -a "$ran" -le "$tln" ]; do
-      ran=$(( $(${RPATH:-.}/rng/ran)*$(${RPATH:-.}/rng/ran) ))
-      until [ "${#ran}" -le $(listS)  ]; do
+      #ran=$(( $(${RPATH:-.}/rng/ran)*$(${RPATH:-.}/rng/ran) ))
+      ran=$(${RPATH:-.}/rng/ran)
+      until [ "${#ran}" -le $(listS) ]; do
         ran=${ran%?}
       done # shorten $ran until it is the length of the number of items in $typelist
     done
@@ -71,11 +115,14 @@ for l in $(s 1 $LINES); do # for each line
     n=0; for i in ${typelist}; do
       : $((n+=1))
       [ "$n" -eq "$ran" ] && {
-        eval $(printf "printf '%%s' \"$%s\"" "$i")
+        [ "$i" = "topwall" -o "$i" = "corner" ] && {
+          : $((mc+=1))
+        } || mc=0
+        eval $(printf 'sgrid "$%s" %s' "$i" "$c")
         break
       }
     done; unset IFS # now select the item and print it
   done
-  echo
+  echo; echo >> grid.state
   # increment a count for $ML and $MC somewhere
 done # this prob makes mparse/rparse obsolete lmao

@@ -22,5 +22,4 @@
 -- using $RANDOM has the flaw of simply not being POSIX'ly defined
 -- some shells implement $RANDOM; and others do not, if used a backup is still required if a shell does not contain it
 # notes
--- testing of rbr is done in a terminal with 45 lines and 207 columns
--- the ptui library is a submodule of this repo, to clone correctly run git with the '--recursive' flag 
+-- please clone with `--recursive` as this project depends on the submods to operate
