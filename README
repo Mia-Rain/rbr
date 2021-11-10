@@ -2,24 +2,9 @@
 # rbr
 -- a room builder for the upcoming mia roguelike
 # caveats
--- generating a ""unique"" room requires some access to a /seed/ (for a PRNG generator algorithm), /dev/(u)random, or $RANDOM
--- these different methods all have there flaws and there feasibility is heavily determined by the specs of the current unix system
-## /seed/'s
--- using a /seed/ plus a PRNG algorithm has the flaw of preducing the same number each time, if the seed does not change
--- due to the limitations of pure POSIX sh, generating a /seed/ is not simple; typically one would generate on via the system clock
--- but as far as I know, pure POSIX sh has no access to such a tool; there are a few different ways to generate unique seeds
--- however these seeds are unlikely to change when generated multiple times on the same system
---- Method 1: generate a system of numbers using $PWD and string length
---- Method 2: generate a system of numbers using the above and by manipulating the limits of $(()) to generate errors
---- Method 3: generate a system of numbers using the contents of $PATH and the number of items in them
---- Method 4: have a(n) human/entity with access to the system clock generate a /seed/ and have them provide it to the system
-## `/dev/(u)random`
--- using /dev/urandom provides us with hardware PRNG level generation
--- however POSIX/SUS does NOT define /dev/urandom or /dev/random; thus using them would not be truly POSIX compliant
--- additonally different systems may use different methods to generate the data in /dev/(u)random
--- thus we have zero control over the secureness of the data it generated
-## $RANDOM
--- using $RANDOM has the flaw of simply not being POSIX'ly defined
--- some shells implement $RANDOM; and others do not, if used a backup is still required if a shell does not contain it
+-- generating a ""unique"" room requires some access a PRNG (pseudorandom number generator)
+-- building a pure software one would likely be a painful task in pure sh
+-- as such this project uses `/dev/urandom` and some self made logic along with an edited LCG algorithm
+-- to generate random numbers (see psh-prng)
 # notes
 -- please clone with `--recursive` as this project depends on the submods to operate
