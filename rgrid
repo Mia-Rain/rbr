@@ -72,7 +72,9 @@ listgen(){ # generate typelist
   unset IFS
 }
 sgrid() { # print $1 while saving it to a grid state file
-  printf '%s' "$1"
+  #printf '%s' "$1"
+  eval $(printf 'l%sc%s="%s"' "$3" "$2" "$1")
+  eval $(printf 'printf $l%sc%s' "$3" "$2")
   [ "$2" -gt 1 -o "$3" -gt 1 ] && {
     printf '%s' "$1" >> grid.state 
   } || { # >>
