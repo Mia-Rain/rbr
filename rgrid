@@ -8,7 +8,6 @@
 #     print ' '
 #   done; echo
 # done
-#
 
 s() { # s acts as seq replacement
   n=$(($1)); while [ "$n" -le $(($2)) ]; do
@@ -18,38 +17,63 @@ s() { # s acts as seq replacement
 listgen(){ # generate typelist
   unset typelist
   types="door;wall;topwall;corner;blank" # these are all the defined types
-  ndoor="2"
-  nwall="3"
-  ntopwall="3"
-  ncorner="4" # corners should be more likely than walls
-  nblank="8" # blank space should be the most likely
-  
+  mndoor="2"
+  mnwall="3"
+  mntopwall="3"
+  mncorner="4" # corners should be more likely than walls
+  mnblank="8" # blank space should be the most likely
+  # max counter
   # how many times they /SHOULD/ appear in the list
+  ndoor=0;nwall=0;ntopwall=0;ncorner=0;nblank=0 # set all counters to 0
+
   IFS=";"; tln=0; for i in ${types}; do # produce a number stating how many should be in the list
-    : $((tln+=$(printf 'n%s' "$i")))
+    : $((tln+=$(printf 'mn%s' "$i")))
   done
   unset IFS
   for i in $(s 1 ${tln}); do
     ran=6;
-    until [ "$ran" -le 5 ]; do
+    unset IFS
+    until [ "$ran" -le $(listSz "${types}" ';') -a "$ran" -gt 0 ]; do
       ran=$(${RPATH:-.}/rng/ran)
       until [ "${#ran}" -eq 1 ]; do
         ran="${ran%?}"
       done
     done
-    n=0; IFS=";"; for i in ${types}; do
-      : $((n+=1))
-      [ "$n" -eq "$ran" ] && {
-        unset IFS
-        eval $(printf 'typelist="${typelist+$typelist;}%s"' "$i")
-      }
-    done 
+    IFS=";"; set -- ${types}; unset IFS
+    eval $(printf 'rann=$%s' "$ran")
+    case "$rann" in
+      blank)
+        typeplist="${typelist+typelist;}blank"
+        : $((nblank+=1))
+        [ "$nblank" -eq "$mnblank" ] && listr "blank" "${types}" ";"
+        ;; # blank
+      corner)
+        typeplist="${typelist+typelist;}corner"
+        : $((ncorner+=1))
+        [ "$ncorner" -eq "$mncorner" ] && listr "corner" "${types}" ";"
+        ;; # corner
+      topwall)
+        typeplist="${typelist+typelist;}topwall"
+        : $((ntopwall+=1))
+        [ "$ntopwall" -eq "$mntopwall" ] && listr "topwall" "${types}" ";"
+        ;; # topwall
+      wall)
+        typeplist="${typelist+typelist;}wall"
+        : $((nwall+=1))
+        [ "$nwall" -eq "$mnwall" ] && listr "wall" "${types}" ";"
+        ;; # wall
+      door)
+        typeplist="${typelist+typelist;}door"
+        : $((ndor+=1))
+        [ "$ndoor" -eq "$mndoor" ] && listr "door" "${types}" ";"
+        ;; # door
+    esac # this is simply faster than a loop
   done
   unset IFS
 }
 sgrid() { # print $1 while saving it to a grid state file
   printf '%s' "$1"
-  [ "$2" -gt 1 ] && {
+  [ "$2" -gt 1 -o "$3" -gt 1 ] && {
     printf '%s' "$1" >> grid.state 
   } || { # >>
     printf '%s' "$1" > grid.state
@@ -77,13 +101,28 @@ listS(){ # return a number that determines the legth of the number of items
   unset IFS
   echo "${#n}"
 }
+listSz(){ # list ($1) size; uses $2 as IFS or unset
+  [ "$2" ] && {
+    IFS="$2"
+  } || unset IFS
+  n=0; for i in ${1}; do
+    : $((n+=1))
+  done
+  echo "$n"
+  unset IFS
+}
 # if there are 4 items in $1/$typelist this will return `1`
 
 [ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 will be for rgrid errors
 unset IFS
 ml=0; for l in $(s 1 $LINES); do # for each line
   mc=0; for c in $(s 1 $COLUMNS); do # left to right across screen
-    listgen # generate the typelist
+    [ "$otypelist" ] && { 
+      typelist="$otypelist"
+    } || {
+      listgen; otypelist="$typelist"
+    }
+    # generate the typelist
     #echo "$typelist"
     # basically the idea here is have a list of all possible things a 1x1 space can be
     # wall,door,blank,etc; these are ofc effected by the blocks around them and the current pos
@@ -118,7 +157,7 @@ ml=0; for l in $(s 1 $LINES); do # for each line
         [ "$i" = "topwall" -o "$i" = "corner" ] && {
           : $((mc+=1))
         } || mc=0
-        eval $(printf 'sgrid "$%s" %s' "$i" "$c")
+        eval $(printf 'sgrid "$%s" %s %s' "$i" "$c" "$l")
         break
       }
     done; unset IFS # now select the item and print it
