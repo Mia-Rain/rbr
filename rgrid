@@ -71,15 +71,10 @@ listgen(){ # generate typelist
   done
   unset IFS
 }
-sgrid() { # print $1 while saving it to a grid state file
+sgrid() { # print $1
   #printf '%s' "$1"
   eval $(printf 'l%sc%s="%s"' "$3" "$2" "$1")
   eval $(printf 'printf $l%sc%s' "$3" "$2")
-  [ "$2" -gt 1 -o "$3" -gt 1 ] && {
-    printf '%s' "$1" >> grid.state 
-  } || { # >>
-    printf '%s' "$1" > grid.state
-  } # > 
 }
 # L = lines; C = COLUMNS
 listr() { # create a new typelist using the items in $2; MUST not contain $1
@@ -114,6 +109,15 @@ listSz(){ # list ($1) size; uses $2 as IFS or unset
   unset IFS
 }
 # if there are 4 items in $1/$typelist this will return `1`
+pos() { # $1 l $2 c
+  [ "$1" -eq 1 ] && {
+    A=-
+  } || A="$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$2") 2>/dev/null)"
+  [ "$2" -eq 1 ] && {
+    L=- # - is placeholder
+  } || L="$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-1))") 2>/dev/null)"
+  echo "$L $A"
+} # output 2 values; left above # not possible for right or below to be set
 
 [ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 will be for rgrid errors
 unset IFS
@@ -125,13 +129,29 @@ ml=0; for l in $(s 1 $LINES); do # for each line
       listgen; otypelist="$typelist"
     }
     # generate the typelist
-    #echo "$typelist"
     # basically the idea here is have a list of all possible things a 1x1 space can be
     # wall,door,blank,etc; these are ofc effected by the blocks around them and the current pos
     # basically use ran() and some pain to have it pick what a block should be
     # the list should be dynamic based on the pos and blocks around it
     # ie; placing a door when there is no where for it to lead makes no sense
-
+    [ "$l" -eq 1 ] && {                     
+      ls=0                                         
+    } || ls=1                          
+    [ "$c" -eq 1 ] && {             
+      cs=0                                                                           
+    } || cs=1                                                                        
+    [ "$(eval $(printf 'printf $l%sc%s' "$((l-ls))" "$((c-cs))") 2>/dev/null)" ] && {
+      # do logic if indexes are set
+      : 
+    } || {
+      IFS=";"
+      listr "door" "${typelist}" ";"
+      IFS=";"
+      listr "topwall" "${typelist}" ";"
+      IFS=";"
+      listr "wall" "${typelist}" ";"
+    }
+    
     [ "$c" -le 3 -o "$l" -lt 2 ] && { # must be at least 3 over on C to create a door
       # must also be at least 1 L down; this should also be effected by the surrounding blocks
       IFS=';'
@@ -144,7 +164,7 @@ ml=0; for l in $(s 1 $LINES); do # for each line
 
     # now use ran to generate a random number
     # $((ran*ran))
-    ran=0; until [ "$ran" -gt 0 -a "$ran" -eq "$ran" -a "$ran" -le "$tln" ]; do
+    ran=0; until [ "$ran" -gt 0 -a "$ran" -eq "$ran" -a "$ran" -le "$((tln+1))" ]; do
       #ran=$(( $(${RPATH:-.}/rng/ran)*$(${RPATH:-.}/rng/ran) ))
       ran=$(${RPATH:-.}/rng/ran)
       until [ "${#ran}" -le $(listS) ]; do
@@ -164,6 +184,6 @@ ml=0; for l in $(s 1 $LINES); do # for each line
       }
     done; unset IFS # now select the item and print it
   done
-  echo; echo >> grid.state
+  echo
   # increment a count for $ML and $MC somewhere
 done # this prob makes mparse/rparse obsolete lmao

@@ -1,4 +1,4 @@
 # set various varibles
 export MAX_ROOM_SIZE="10x15" # max size of room # TxW ; LxC
-export COLUMNS=259 # should be configured by user
 export LINES=62 # should be configured by user
+export COLUMNS=259 # should be configured by user
