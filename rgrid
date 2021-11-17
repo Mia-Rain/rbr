@@ -20,8 +20,8 @@ listgen(){ # generate typelist
   mndoor="2"
   mnwall="3"
   mntopwall="3"
-  mncorner="4" # corners should be more likely than walls
-  mnblank="8" # blank space should be the most likely
+  mncorner="3" # corners should be more likely than walls
+  mnblank="6" # blank space should be the most likely
   # max counter
   # how many times they /SHOULD/ appear in the list
   ndoor=0;nwall=0;ntopwall=0;ncorner=0;nblank=0 # set all counters to 0
@@ -43,29 +43,29 @@ listgen(){ # generate typelist
     eval $(printf 'rann=$%s' "$ran")
     case "$rann" in
       blank)
-        typeplist="${typelist+typelist;}blank"
+        typelist="${typelist+$typelist;}blank"
         : $((nblank+=1))
-        [ "$nblank" -eq "$mnblank" ] && listr "blank" "${types}" ";"
+        [ $nblank -eq $mnblank ] && types=$(listr "blank" "${types}" ";")
         ;; # blank
       corner)
-        typeplist="${typelist+typelist;}corner"
+        typelist="${typelist+$typelist;}corner"
         : $((ncorner+=1))
-        [ "$ncorner" -eq "$mncorner" ] && listr "corner" "${types}" ";"
+        [ $ncorner -eq $mncorner ] && types=$(listr "corner" "${types}" ";")
         ;; # corner
       topwall)
-        typeplist="${typelist+typelist;}topwall"
+        typelist="${typelist+$typelist;}topwall"
         : $((ntopwall+=1))
-        [ "$ntopwall" -eq "$mntopwall" ] && listr "topwall" "${types}" ";"
+        [ $ntopwall -eq $mntopwall ] && types=$(listr "topwall" "${types}" ";")
         ;; # topwall
       wall)
-        typeplist="${typelist+typelist;}wall"
+        typelist="${typelist+$typelist;}wall"
         : $((nwall+=1))
-        [ "$nwall" -eq "$mnwall" ] && listr "wall" "${types}" ";"
+        [ $nwall -eq $mnwall ] && types=$(listr "wall" "${types}" ";")
         ;; # wall
       door)
-        typeplist="${typelist+typelist;}door"
-        : $((ndor+=1))
-        [ "$ndoor" -eq "$mndoor" ] && listr "door" "${types}" ";"
+        typelist="${typelist+$typelist;}door"
+        : $((ndoor+=1))
+        [ $ndoor -eq $mndoor ] && types=$(listr "door" "${types}" ";")
         ;; # door
     esac # this is simply faster than a loop
   done
@@ -78,18 +78,18 @@ sgrid() { # print $1
 }
 # L = lines; C = COLUMNS
 listr() { # create a new typelist using the items in $2; MUST not contain $1
-  unset typelist
+  IFS=${3}
   n=0; for i in ${2}; do
     : $((n+=1))
     [ "$i" != "$1" ] && {
-      typelist="${typelist+$typelist$3}$i"
+      o="${o+$o$3}$i"
     }
   done
   tln=$((n-1))
   unset IFS # IFS should be set before calling
   # unset to prevent later issues
-} # remove an item from typelist
-
+  echo "$o"
+} # remove an item from $2
 listS(){ # return a number that determines the legth of the number of items
   IFS="${2:-;}"
   n=0; for i in ${1:-${typelist}}; do
@@ -120,7 +120,7 @@ pos() { # $1 l $2 c
 } # output 2 values; left above # not possible for right or below to be set
 
 [ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 will be for rgrid errors
-unset IFS
+unset IFS otypelist
 ml=0; for l in $(s 1 $LINES); do # for each line
   mc=0; for c in $(s 1 $COLUMNS); do # left to right across screen
     [ "$otypelist" ] && { 
@@ -134,28 +134,32 @@ ml=0; for l in $(s 1 $LINES); do # for each line
     # basically use ran() and some pain to have it pick what a block should be
     # the list should be dynamic based on the pos and blocks around it
     # ie; placing a door when there is no where for it to lead makes no sense
-    [ "$l" -eq 1 ] && {                     
-      ls=0                                         
-    } || ls=1                          
-    [ "$c" -eq 1 ] && {             
-      cs=0                                                                           
-    } || cs=1                                                                        
-    [ "$(eval $(printf 'printf $l%sc%s' "$((l-ls))" "$((c-cs))") 2>/dev/null)" ] && {
+    [ "$l" -eq 1 ] && {
+      ls=0
+    } || ls=1
+    [ "$c" -eq 1 ] && {
+      cs=0
+    } || cs=1
+    [ "$l1c1" ] && {
       # do logic if indexes are set
-      : 
+      unset IFS; pos="$(pos $l $c)"; set -- ${pos}
+      [ "$1" = "+" ] && {
+        typelist=$(listr "door" "${typelist}" ";")
+        typelist=$(listr "blank" "${typelist}" ";")
+        typelist=$(listr "corner" "${typelist}" ";")
+        [ "$2" = "-" ] && {
+          typelist=$(listr "wall" "${typelist}" ";")
+        }
+      }
     } || {
-      IFS=";"
-      listr "door" "${typelist}" ";"
-      IFS=";"
-      listr "topwall" "${typelist}" ";"
-      IFS=";"
-      listr "wall" "${typelist}" ";"
+      typelist=$(listr "door" "${typelist}" ";")
+      typelist=$(listr "topwall" "${typelist}" ";")
+      typelist=$(listr "wall" "${typelist}" ";")
     }
     
     [ "$c" -le 3 -o "$l" -lt 2 ] && { # must be at least 3 over on C to create a door
       # must also be at least 1 L down; this should also be effected by the surrounding blocks
-      IFS=';'
-      listr "door" "${typelist}" ";"
+      typelist=$(listr "door" "${typelist}" ";")
     }
 
     #[ "$mc" -eq "$MC" ] && {
@@ -164,7 +168,7 @@ ml=0; for l in $(s 1 $LINES); do # for each line
 
     # now use ran to generate a random number
     # $((ran*ran))
-    ran=0; until [ "$ran" -gt 0 -a "$ran" -eq "$ran" -a "$ran" -le "$((tln+1))" ]; do
+    ran=0; until [ "$ran" -gt 0 -a "$ran" -eq "$ran" -a "$ran" -le "$tln" ]; do
       #ran=$(( $(${RPATH:-.}/rng/ran)*$(${RPATH:-.}/rng/ran) ))
       ran=$(${RPATH:-.}/rng/ran)
       until [ "${#ran}" -le $(listS) ]; do
