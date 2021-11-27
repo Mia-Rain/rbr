@@ -6,5 +6,10 @@
 -- building a pure software one would likely be a painful task in pure sh
 -- as such this project uses `/dev/urandom` and some self made logic along with an edited LCG algorithm
 -- to generate random numbers (see psh-prng)
+# exit codes
+-- 10: generic rgrid errors
+-- 12: typelist errors
+--- 13: empty $2 in listr()
 # notes
+-- a nerdfonts compatible font should be used
 -- please clone with `--recursive` as this project depends on the submods to operate

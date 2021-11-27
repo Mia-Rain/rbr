@@ -20,7 +20,7 @@ listgen(){ # generate typelist
   # gen.env now handles max counter's
 
   # how many times they /SHOULD/ appear in the list
-  ndoor=0;nwall=0;ntopwall=0;ncorner=0;nblank=0 # set all counters to 0
+  ndoor=0;nwall=0;ntopwall=0;ncorner=0;nblank=0;nfloor=0 # set all counters to 0
   IFS=";"; tln=0; for i in ${types}; do # produce a number stating how many should be in the list
     : $((tln+=$(printf 'mn%s' "$i")))
   done
@@ -37,6 +37,11 @@ listgen(){ # generate typelist
     IFS=";"; set -- ${types}; unset IFS
     eval $(printf 'rann=$%s' "$ran")
     case "$rann" in
+      floor)
+        typelist="${typelist+$typelist;}floor"
+        : $((nfloor+=1))
+        [ $nfloor -eq $mnfloor ] && types=$(listr "floor" "${types}" ";")
+        ;;
       blank)
         typelist="${typelist+$typelist;}blank"
         : $((nblank+=1))
@@ -70,9 +75,8 @@ listgen(){ # generate typelist
 clist() { # correct errors in typelist
   IFS=";"; unset typelist
   [ ! "${#1}" -gt 1 ] && {
-    echo 'EMPTY TYPELIST !?'
     printf 'pos: %s | original typelist: %s\n' "$pos" "$otypelist" >> ./debug
-    exit 10
+    exit 12
   }
   for i in ${1}; do
     [ "${#i}" -gt 1 ] && {
@@ -80,18 +84,25 @@ clist() { # correct errors in typelist
     }
   done
 }
-sgrid() { # print $1
+sgrid() { # print $1 # $3 l $2 c
   case "$1" in
     '=') topwallc=$((${topwallc:-0}+1)) ;;
-    '+') unset topwallc
+    '#'|'|') wallc=$((${wallc:-0}+1)) ;;    
+    '+') unset topwallc wallc ;;
+    ' ') unset room 
   esac # counter logic
-  printf '%s' "$1" >> ./debug
+  printf 'list length: %s | pos: %s | room: %s | typelist: %s | picked #%s (' "$tln${topwallc+ | topwall counter: $topwallc}" "$pos & $dpos" "${room:-false}" "$typelist" "$ran" >> ./debug 
+  printf '%s)\n' "$1" >> ./debug
   eval $(printf 'l%sc%s="%s"' "$3" "$2" "$1")
   eval $(printf 'printf $l%sc%s' "$3" "$2")
 }
 # L = lines; C = COLUMNS
 listr() { # create a new typelist using the items in $2; MUST not contain $1
   IFS=${3}
+  [ "${#2}" -gt 1 ] || {
+    printf '\n'
+    exit 13 # list error
+  }
   n=0; for i in ${2}; do
     : $((n+=1))
     [ "$i" != "$1" ] && {
@@ -123,13 +134,13 @@ listSz(){ # list ($1) size; uses $2 as IFS or unset
 # if there are 4 items in $1/$typelist this will return `1`
 pos() { # $1 l $2 c
   oIFS="${IFS}"; IFS=""
-  if [ "$1" -eq 1 ]; then
+  if [ "$1" -eq 3 ]; then
     A=--
   else
     [ "$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$2") 2>/dev/null)" = " " ] && {
       A="b"
     } || A="$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$2") 2>/dev/null)$A"
-    if [ "$1" -eq 2 ]; then
+    if [ "$1" -eq 4 ]; then
       A="${A}-"
     else 
       [ "$(eval $(printf 'printf $l%sc%s' "$(($1-2))" "$2") 2>/dev/null)" = " " ] && {
@@ -137,13 +148,13 @@ pos() { # $1 l $2 c
       } || A="$A$(eval $(printf 'printf $l%sc%s' "$(($1-2))" "$2") 2>/dev/null)"
     fi
   fi
-  if [ "$2" -eq 1 ]; then
+  if [ "$2" -eq 3 ]; then
     L=-- # - is placeholder
   else
     [ "$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-1))") 2>/dev/null)" = " " ] && {
       L="b" # replace ' ' (blank) with b
     } || L="$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-1))") 2>/dev/null)"
-    if [ "$2" -eq 2 ]; then
+    if [ "$2" -eq 4 ]; then
       L="-${L}"
     else 
       [ "$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-2))") 2>/dev/null)" = " " ] && {
@@ -155,7 +166,7 @@ pos() { # $1 l $2 c
 } # output 2 values; leftleft aboveabove # not possible for right or below to be set
 dpos() { # diagonal pos # $1 l $2 c
   oIFS="${IFS}"; IFS=""
-  if [ "$1" -eq 1 ]; then
+  if [ "$1" -eq 3 ]; then
     R=-; L=-
   else
     [ "$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2+1))") 2>/dev/null)" = " " ] && {
@@ -186,12 +197,48 @@ inchance() { # increase the chance of $1 being picked $2 times # $3 should be `;
 [ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 will be for rgrid errors
 unset IFS otypelist
 :>./debug # write `true` to debug (empty)
-ml=0; for l in $(s 1 $((LINES-2))); do # for each line
+ml=0; for l in $(s 1 $LINES); do # for each line
   mc=0; for c in $(s 1 $COLUMNS); do # left to right across screen
+    case "$l" in
+      '1'|"$LINES")
+        [ "$c" -eq 1 -o "$c" -eq $COLUMNS ] && {
+          bord="$corner"
+        } || bord="$topwall" ;;
+      '2'|"$((LINES-1))")
+        bord="$blank" ;;
+      *)
+        unset bord
+    esac
+    case "$c" in
+      '1'|$COLUMNS)
+        [ "$l" -eq 1 -o "$l" -eq $LINES ] || bord="$wall" ;;
+      '2'|"$((COLUMNS-1))")
+        [ "$bord" ] || bord="$blank" ;;
+      *) 
+        [ "$bord" ] || unset bord
+    esac
+    [ "$bord" ] && {
+      printf '%s' "$bord"
+      continue
+    } 
+    [ "$c" -gt $((COLUMNS-6 -2)) ] && {
+      pos=$(pos $l $c)
+      case "$pos" in
+        *'= '*)
+          sgrid "$corner" "$c" "$l" ;;
+        *)
+          printf '%s' "$blank"
+      esac
+      continue
+    }
+
+    # borders
+    typelist=$(listr "floor" "${typelist}" ";")
     [ "$otypelist" ] && { 
       typelist="$otypelist"
     } || {
       listgen; otypelist="$typelist"
+      otypelist=$(listr "floor" "${otypelist}" ";")
     }
     # generate the typelist
     # basically the idea here is have a list of all possible things a 1x1 space can be
@@ -199,21 +246,42 @@ ml=0; for l in $(s 1 $((LINES-2))); do # for each line
     # basically use ran() and some pain to have it pick what a block should be
     # the list should be dynamic based on the pos and blocks around it
     # ie; placing a door when there is no where for it to lead makes no sense
-    if [ "$l1c1" ]; then # counter logic is handled in sgrid() as items are handed off to it after being picked
+    if [ "$l3c3" ]; then # counter logic is handled in sgrid() as items are handed off to it after being picked
       # do logic if indexes are set
+      dpos="$(dpos $l $c)"
       pos="$(pos $l $c)"
+      ## POSITIONAL LOGIC
+      
+      ## ROOM/SMART
+      case "$dpos $pos" in
+        ?' '?' '?'= '??|?????'b '??)
+          unset room ;;
+        '+ '?' '??' ='?|'= '?' '?'b '??|?' '?' '?' ='?|?' '?' '??' '?|?'  '??' b'?|?'  '??' +'?|?'  '??' ='?|?' = '?' '??|?????'| ='?)
+          room="true" ;;
+        *)
+          unset room
+      esac
+      ## BESIDE
       case "${pos}" in # ? is any /single/ char
+        "+ "??)
+          typelist=$(listr "floor" "${typelist}" ";") && unset room
+          typelist=$(listr "blank" "${typelist}" ";")
+          typelist=$(listr "corner" "${typelist}" ";") ;;
+        "# "??|"| "??)
+          typelist=$(listr "topwall" "${typelist}" ";")
+          typelist=$(listr "corner" "${typelist}" ";") ;;
         ?"| "??)
           typelist=$(listr "corner" "${typelist}" ";")
           typelist=$(listr "topwall" "${typelist}" ";") ;;
+        "+b "??)
+          typelist=$(listr "topwall" "${typelist}" ";")
+          typelist=$(listr "door" "${typelist}" ";") ;;
         "b+ "??)
+          typelist=$(listr "door" "${typelist}" ";")
           typelist=$(listr "corner" "${typelist}" ";")
           typelist=$(listr "blank" "${typelist}" ";") ;;
-        ?"b "??)
-          typelist=$(listr "topwall" "${typelist}" ";")
-          [ "$c" -eq $((COLUMNS -1)) ] && { 
-            typelist=$(listr "corner" "${typelist}" ";")
-          } || : ;;
+        ?"b "??|?" "??)
+          typelist=$(listr "topwall" "${typelist}" ";") ;;
         "=+ "??)
           inchance "blank" "3" ";"
           typelist=$(listr "door" "${typelist}" ";")
@@ -237,18 +305,22 @@ ml=0; for l in $(s 1 $((LINES-2))); do # for each line
             typelist=$(listr "topwall" "${typelist}" ";")
             typelist=$(listr "blank" "${typelist}" ";")
           } || {
-            [ "$topwallc" -lt 6 ] 2>/dev/null && {
+            [ "$topwallc" -lt $((MiC+1)) ] 2>/dev/null && {
               typelist=$(listr "corner" "${typelist}" ";")
             }
           }
           inchance "topwall" "3" ";"
-          [ "$c" -eq $((COLUMNS -1)) ] && {
-            inchance "corner" "2" ";"
-            typelist=$(listr "topwall" "${typelist}" ";")
-          } || :
           ;; # increase the chance of topwall
         # topwall logic
-        ?"# "??)
+        "b# "??)
+          room="true"
+          typelist=$(listr "door" "${typelist}" ";")
+          typelist=$(listr "blank" "${typelist}" ";")
+          typelist=$(listr "corner" "${typelist}" ";")
+          typelist=$(listr "topwall" "${typelist}" ";")
+          typelist=$(listr "wall" "${typelist}" ";") ;;
+        ?"# "??|"#"?" "??)
+          typelist=$(listr "door" "${typelist}" ";")
           typelist=$(listr "corner" "${typelist}" ";") 
           typelist=$(listr "topwall" "${typelist}" ";")
           typelist=$(listr "wall" "${typelist}" ";") ;;
@@ -256,37 +328,61 @@ ml=0; for l in $(s 1 $((LINES-2))); do # for each line
           typelist=$(listr "topwall" "${typelist}" ";")
       esac
       # one case for beside, one for above
+      ## BELOW/ABOVE
       case "$pos" in
+        ??" ++")
+          typelist=$(listr "corner" "${typelist}" ";")
+          typelist=$(listr "door" "${typelist}" ";")
+          typelist=$(listr "wall" "${typelist}" ";") ;;
         ??" #"?)
-          inchance "corner" "2" ";"
+          [ "${wallc:-0}" -lt $((MiL+1)) ] && {
+            typelist=$(listr "corner" "${typelist}" ";")
+          } || inchance "corner" "2" ";"
+          [ "${wallc:-0}" -gt $ML ] && typelist=$(listr "wall" "${typelist}" ";")
           typelist=$(listr "blank" "${typelist}" ";")
           typelist=$(listr "topwall" "${typelist}" ";") ;;
-        *' |'*)
-          inchance "corner" "2" ";"
-          inchance "wall" "4" ";"
+        ??" |"?)
+          inchance "wall" "2" ";"
+          [ "${wallc:-0}" -lt $((MiL+1)) ] && {
+            typelist=$(listr "corner" "${typelist}" ";")
+          }
+          [ "${wallc:-0}" -gt $ML ] && typelist=$(listr "wall" "${typelist}" ";")
           typelist=$(listr "topwall" "${typelist}" ";")
           typelist=$(listr "door" "${typelist}" ";")
           typelist=$(listr "blank" "${typelist}" ";") ;;
         ??" bb")
           typelist=$(listr "door" "${typelist}" ";")
           typelist=$(listr "wall" "${typelist}" ";") ;;
-        ??" ="?|??" b=")
-          typelist=$(listr "topwall" "${typelist}" ";")
+        ??" ="?|??" b="|??" "?)
+          case "$pos" in
+            ??' '|?'+ '|'+= '|'== '|?'+ +'|'+= +'|'== +') : ;;
+            *)
+              typelist=$(listr "corner" "${typelist}" ";")
+              typelist=$(listr "topwall" "${typelist}" ";")
+          esac
           typelist=$(listr "wall" "${typelist}" ";")
-          typelist=$(listr "corner" "${typelist}" ";")
-          typelist=$(listr "door" "${typelist}" ";") 
-          inchance "blank" "4" ";" ;;
+          typelist=$(listr "door" "${typelist}" ";") ;; 
+          #inchance "floor" "4" ";" ;;
         ??" b"?)
           typelist=$(listr "door" "${typelist}" ";")
           #typelist=$(listr "topwall" "${typelist}" ";")
           #typelist=$(listr "corner" "${typelist}" ";")
           typelist=$(listr "wall" "${typelist}" ";") ;;
         ??" +-"|??" +b")
-          inchance "wall" "1" ";"
+          case "$pos" in
+            '#'????|?'# '??|?'| '??) typelist=$(listr "wall" "${typelist}" ";") ;; # cannot be wall if wall is 2 blocks over 
+            ?"b "??|?" "??)
+              inchance "wall" "2" ";"
+          esac
           typelist=$(listr "topwall" "${typelist}" ";")
           typelist=$(listr "corner" "${typelist}" ";")
           typelist=$(listr "blank" "${typelist}" ";") ;;
         ??" +"?)
+          case "$pos" in
+            '#'????|?'# '??|?'| '??) typelist=$(listr "wall" "${typelist}" ";") ;; # cannot be wall if wall is 2 blocks over 
+            ?"b "??|?" "??)
+              inchance "wall" "3" ";"
+          esac
           typelist=$(listr "topwall" "${typelist}" ";")
           typelist=$(listr "corner" "${typelist}" ";") ;;
         ??" ="?|??" b=")
@@ -295,14 +391,42 @@ ml=0; for l in $(s 1 $((LINES-2))); do # for each line
           typelist=$(listr "corner" "${typelist}" ";")
           typelist=$(listr "door" "${typelist}" ";") ;;
         ??" -"?)
+          typelist=$(listr "door" "${typelist}" ";")
           typelist=$(listr "wall" "${typelist}" ";")
       esac
       case "$pos" in
-        ?'= #'?|?'= |'?)
+        ?'= #'?|?'= |'?|?'= +'?|?'+ #'?|?'+ +'?)
           typelist=$(listr "wall" "${typelist}" ";")
           inchance "corner" "2" ";"
       esac
+      ## DIAGONAL
+      case "$dpos" in
+        ?' +'|'+ '?|?' #')
+          typelist=$(listr "corner" "${typelist}" ";") ;;
+        ??'b'|??' ')
+          case "$pos" in
+            ?'b '??)
+              typelist=$(listr "door" "${typelist}" ";")
+              typelist=$(listr "wall" "${typelist}" ";")
+          esac
+          :
+        #?' ')
+        #  typelist=$(listr "wall" "${typelist}" ";")
+        #  typelist=$(listr "corner" "${typelist}" ";") ;;
+      esac
+      
+      ## FLOOR
+      [ "$room" ] && {
+        case "$pos" in
+          ??" =") inchance "blank" "4" ";" ;;
+          *)
+            typelist=$(listr "blank" "${typelist}" ";")
+            inchance "floor" "3" ";"
+        esac
+      } || typelist=$(listr "floor" "${typelist}" ";")
+
     else # below may run if last exit code is !0 and not handled
+      typelist=$(listr "floor" "${typelist}" ";") 
       typelist=$(listr "door" "${typelist}" ";")
       typelist=$(listr "topwall" "${typelist}" ";")
       typelist=$(listr "wall" "${typelist}" ";")
@@ -315,7 +439,6 @@ ml=0; for l in $(s 1 $((LINES-2))); do # for each line
     clist "${typelist}" # correct any errors in the list
     # $tln is not globally adjusted by listr -- since it runs in a subshell; below is the simplest fix
     IFS=";"; set -- ${typelist}; tln=${#}; unset IFS ran
-    printf 'list length: %s | pos: %s - typelist: %s' "$tln${topwallc+ - topwall counter: $topwallc}" "$pos" "$typelist" >> ./debug
     ran=0; until [ "$ran" -gt 0 -a "$ran" -eq "$ran" -a "$ran" -le "$tln" ]; do
       ran=$(${RPATH:-.}/rng/ran) 
       until [ "${ran%0}" = "$ran" ]; do
@@ -330,7 +453,6 @@ ml=0; for l in $(s 1 $((LINES-2))); do # for each line
     done
     # generate random number less than or equal to the number of items in $typelist
     IFS=";"
-    printf ' | picked: #%s (' "$ran" >> ./debug
     n=0; for i in ${typelist}; do
       : $((n+=1))
       [ "$n" -eq "$ran" ] && {
@@ -342,12 +464,7 @@ ml=0; for l in $(s 1 $((LINES-2))); do # for each line
         break
       }
     done; unset IFS # now select the item and print it
-    printf ')\n' >> ./debug
   done
   echo; unset topwallc # reset counter on now line
-  echo 'NEW LINEW' >> ./debug
-  # increment a count for $ML and $MC somewhere
+  echo 'NEW LINE' >> ./debug
 done # this prob makes mparse/rparse obsolete lmao
-printf '+'; for i in $(s 1 $((COLUMNS-2))); do
-  printf '='
-done; printf '+\n'

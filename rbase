@@ -43,6 +43,8 @@ export wall='#' # 1x1 block of 3's
 export door='|' # 1x1 block of |'s 
 export corner='+' # 1x1 block of +'s
 export topwall='=' # 1x1 block of ='s # rparse
+export path='' # 1x1 path block
+export floor='' # 1x1 floor block
 . ${RPATH:-.}/env # env file is used for various rendering data as well as the term size # user should manually configure this
 IFS="x"; set -- ${MAX_ROOM_SIZE}; export ML="$1"; export MC="$2"
 IFS="x"; set -- ${MIN_ROOM_SIZE}; export MiL="$1"; export MiC="$2"
