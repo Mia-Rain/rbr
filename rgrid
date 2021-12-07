@@ -1,4 +1,5 @@
 #!/bin/sh
+FILE="$1"
 . ${RPATH:-.}/rbase # pull in the base values
 . ${RPATH:-.}/env
 . ${RPATH:-.}/gen.env
@@ -97,13 +98,13 @@ sgrid() { # print $1 # $3 l $2 c
     ' ') unset room 
   esac # counter logic
   # DEBUG
-  printf 'list length: %s | pos: %s | room: %s ' "$tln" "$pos & $dpos" "${room:-false}" >> ./debug
+  printf 'list length: %s | pos: %s | l %s c %s | room: %s ' "$tln" "$pos & $dpos" "$l" "$c" "${room:-false}" >> ./debug
   case "$1" in
     '=') printf '| topwall counter: %s ' "${topwallc:-0}" >> ./debug  ;;
     '#'|'|') printf '| wall counter: %s ' "${wallc:-0}" >> ./debug
   esac
   printf '| typelist: %s | picked #%s (' "$typelist" "$ran" >> ./debug 
-  printf '%s)\n' "$1" >> ./debug
+  printf '%s)\n' "$1" >> ./debug; [ "$FILE" ] || printf '%s' "$1" >> state
   eval $(printf 'l%sc%s="%s"' "$3" "$2" "$1")
   eval $(printf 'printf $l%sc%s' "$3" "$2")
 }
@@ -205,45 +206,90 @@ inchance() { # increase the chance of $1 being picked $2 times # $3 should be `;
   IFS="${oIFS}"
 }
 
+# ALWAYS
 [ "$LINES" -a "$COLUMNS" ] || exit 10 # exit code 10 will be for rgrid errors
 unset IFS otypelist
+# CON
+cont() { # continue reading from a state file -- given as $1 or `-` for STDIN
+  oIFS="${IFS}"; IFS=""; #l=3
+  : $((l-=1))
+  while read -r p || [ -n "$p" ]; do
+    c=3; dpos="$(dpos $l $c)"; pos="$(pos $l $c)"
+    : $((l+=1))
+    while [ "$p" ]; do
+      next="${p#?}" # current is ${p%$next}
+      sgrid "${p%$next}" "$c" "$l"
+      : $((c+=1))
+      p="${next}"; unset next
+    done
+  done
+  export Fc=$c
+  unset FILE
+  IFS="${oIFS}"
+}
+bord() {
+  case "$l" in
+    '1'|"$LINES")
+      [ "$c" -eq 1 -o "$c" -eq $COLUMNS ] && {
+        bord="$corner"
+      } || bord="$topwall" ;;
+    '2'|"$((LINES-1))")
+      bord="$blank" ;;
+    *)
+      unset bord
+  esac
+  case "$c" in
+    '1'|$COLUMNS)
+      [ "$l" -eq 1 -o "$l" -eq $LINES ] || bord="$wall" ;;
+    '2'|"$((COLUMNS-1))")
+      [ "$bord" ] || bord="$blank" ;;
+    *) 
+      [ "$bord" ] || unset bord
+  esac
+}
+# DEFAULT
 :>./debug # write `true` to debug (empty)
+[ "$1" -a "$FILE" ] && {
+  case "${FILE}" in
+    'help'|'-h'|'--h'*|'?') 
+      while read -r p || [ "$p" ] ; do
+        echo "$p"
+      done << 'EOF'
+rgrid: Generates a "level" layout using a drunkard walk algo
+Usage:
+  ./rgrid
+    -- generate starting from l1c1
+  ./rgrid ./state
+    -- read from ./state using cont() then resume generation at its end
+  ./rgrid help 
+    -- prints this silly
+EOF
+      exit 0;;
+  esac
+}
+[ "$FILE" ] || :>./state 
 ml=0; for l in $(s 1 $LINES); do # for each line
   mc=0; for c in $(s 1 $COLUMNS); do # left to right across screen
-    case "$l" in
-      '1'|"$LINES")
-        [ "$c" -eq 1 -o "$c" -eq $COLUMNS ] && {
-          bord="$corner"
-        } || bord="$topwall" ;;
-      '2'|"$((LINES-1))")
-        bord="$blank" ;;
-      *)
-        unset bord
-    esac
-    case "$c" in
-      '1'|$COLUMNS)
-        [ "$l" -eq 1 -o "$l" -eq $LINES ] || bord="$wall" ;;
-      '2'|"$((COLUMNS-1))")
-        [ "$bord" ] || bord="$blank" ;;
-      *) 
-        [ "$bord" ] || unset bord
-    esac
-    [ "$bord" ] && {
+    [ "$Fc" ] && {
+      : $((c+=Fc))
+      [ "$Fc" -ge 3 ] && : $((c-=3))
+    }
+
+    bord; [ "$bord" ] && {
       printf '%s' "$bord"
       continue
-    } 
+    } # draw borders
     [ "$c" -gt $((COLUMNS-6 -2)) ] && {
       pos=$(pos $l $c)
       case "$pos" in
         *'= '*)
           sgrid "$corner" "$c" "$l" ;;
         *)
-          printf '%s' "$blank"
+          printf '%s' "$blank"; printf '%s' "$blank" >> ./state
       esac
       continue
-    }
+    } # draw right side edge
 
-    # borders
     typelist=$(listr "floor" "${typelist}" ";")
     [ "$otypelist" ] && { 
       typelist="$otypelist"
@@ -251,6 +297,15 @@ ml=0; for l in $(s 1 $LINES); do # for each line
       listgen; otypelist="$typelist"
       otypelist=$(listr "floor" "${otypelist}" ";")
     }
+
+    [ "$FILE" ] && {
+      case "$FILE" in
+        '-') cont <&0 ;;
+        *) cont < "${FILE}"
+      esac
+      unset FILE
+    }
+    
     # generate the typelist
     # basically the idea here is have a list of all possible things a 1x1 space can be
     # wall,door,blank,etc; these are ofc effected by the blocks around them and the current pos
@@ -380,7 +435,7 @@ ml=0; for l in $(s 1 $LINES); do # for each line
           typelist=$(listr "wall" "${typelist}" ";") ;;
         ??" ="?|??" "?)
           case "$pos" in
-            ??' '|?'+ '|'+= '|'== '|?'+ +'|'+= +'|'== +') : ;;
+            ??' '|?'+ '|'+= '|'== '|?'+ +'|'+= +'|'== +'|??" =") : ;;
             *)
               typelist=$(listr "corner" "${typelist}" ";")
               typelist=$(listr "topwall" "${typelist}" ";")
@@ -490,5 +545,6 @@ ml=0; for l in $(s 1 $LINES); do # for each line
     done; unset IFS # now select the item and print it
   done
   echo; unset topwallc # reset counter on now line
-  echo 'NEW LINE' >> ./debug
+  [ "$bord" ] || echo 'NEW LINE' >> ./debug && unset Fc
+  [ "$bord" ] || echo >> ./state
 done # this prob makes mparse/rparse obsolete lmao
