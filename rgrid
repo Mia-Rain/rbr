@@ -21,7 +21,7 @@ listgen(){ # generate typelist
   # gen.env now handles max counter's
 
   # how many times they /SHOULD/ appear in the list
-  ndoor=0;nwall=0;ntopwall=0;ncorner=0;nblank=0;nfloor=0 # set all counters to 0
+  ndoor=0;nswall=0;ntopwall=0;ncorner=0;nblank=0;nfloor=0 # set all counters to 0
   IFS=";"; tln=0; for i in ${types}; do # produce a number stating how many should be in the list
     : $((tln+=$(printf 'mn%s' "$i")))
   done
@@ -58,10 +58,10 @@ listgen(){ # generate typelist
         : $((ntopwall+=1))
         [ $ntopwall -eq $mntopwall ] && types=$(listr "topwall" "${types}" ";")
         ;; # topwall
-      wall)
-        typelist="${typelist+$typelist;}wall"
-        : $((nwall+=1))
-        [ $nwall -eq $mnwall ] && types=$(listr "wall" "${types}" ";")
+      swall)
+        typelist="${typelist+$typelist;}swall"
+        : $((nswall+=1))
+        [ $nswall -eq $mnswall ] && types=$(listr "swall" "${types}" ";")
         ;; # wall
       door)
         typelist="${typelist+$typelist;}door"
@@ -76,17 +76,12 @@ listgen(){ # generate typelist
 
 clist() { # correct errors in typelist
   IFS=";"; unset typelist
-  # dash correction -- dash seems to have issues with the positional logic after l1 (l3)
-  # after setting 3 columns typelist seems to reset and ignore the cases all together
-  # something is likely calling sgrid before it should be
-  sidepos; apos; diapos
 
   [ ! "${#1}" -gt 1 ] && {
     printf 'empty typelist!!! -- ' >> ./debug
     case "$vpos" in
      ?"b +"?) inchance "blank" "2" ";" ;;
      ?"= "??) typelist=$(listr "blank" "${typelist}" ";") ;;
-     ?"= ${floor}+") inchance "corner" "3" ";" ;; # end walls in corners
      *)
       printf 'COULD NOT CORRECT...\n' >> ./debug
       printf 'pos: %s | original typelist: %s\n' "$vpos & $vdpos" "$otypelist" >> ./debug
@@ -96,8 +91,37 @@ clist() { # correct errors in typelist
   }
   case "$vpos" in
     ?'= '??|?'+ '??) : ;;
-    ??" ${floor}"?) inchance "floor" "3" ";"
+    ??" f"?) inchance "floor" "5" ";" 
+      case "$vpos" in
+        ??" f=") typelist=$(listr "blank" "${typelist}" ";")
+      esac ;;
   esac
+  case "$vpos" in
+    ??" =-"|?"f =b"|"f+ "??) typelist=$(listr "blank" "${typelist}" ";")
+  esac
+  case "$vpos" in
+    ?"= "??) typelist=$(listr "floor" "${typelist}" ";")
+  esac
+  case "$vpos" in
+    ?"= f+") inchance "corner" "3" ";" ;; # end walls in corners
+  esac
+  case "$vpos" in
+    ?"f f"?) inchance "floor" "3" ";"
+  esac
+  [ "$c" -gt $((COLUMNS-4 -2)) ] && {
+    printf '@%s & %s | border close...' "$vpos" "$vdpos" >> ./debug
+    case "$vpos" in
+      ?"= "??)
+        typelist=$(listr "topwall" "${typelist}" ";")
+        inchance "corner" "2" ";";;
+      ?"b "??)
+        typelist=$(listr "corner" "${typelist}" ";") ;;
+      ?"f #"?|?"f +"?)
+        inchance "swall" "2" ";"
+        inchance "corner" "2" ";" ;;
+    esac
+  }
+  
   for i in ${1}; do
     [ "${#i}" -gt 1 ] && {
       typelist="${typelist+${typelist};}$i"
@@ -118,16 +142,17 @@ clist() { # correct errors in typelist
 sgrid() { # print $1 # $3 l $2 c
   case "$1" in
     '=') topwallc=$((${topwallc:-0}+1)) ;;
-    '#'|'|') wallc=$((${wallc:-0}+1)); ;;    
-    '+') unset topwallc; unset wallc ;;
+    '#'|'|') swallc=$((${swallc:-0}+1)); [ "$((swallc%2))" -eq 0 -a "$swallc" -ge 2 ] && swallc=$((swallc/2)) ;;    
+    '+') unset topwallc; unset swallc ;;
     ' ') unset room 
   esac # counter logic
   # DEBUG
   printf 'list length: %s | pos: %s | l %s c %s | room: %s ' "$tln" "$vpos & $vdpos" "$l" "$c" "${room:-false}" >> ./debug
   case "$1" in
     '=') printf '| topwall counter: %s ' "${topwallc:-0}" >> ./debug  ;;
-    '#'|'|') printf '| wall counter: %s ' "${wallc:-0}" >> ./debug
+    '#'|'|') printf '| wall counter: %s ' "${swallc:-0}" >> ./debug
   esac
+  [ "$1" != "#" -a "$1" != "|" -a "$room" ] && printf '| wall counter: %s ' "${swallc:-0}" >> ./debug
   printf '| typelist: %s | picked #%s (' "$typelist" "$ran" >> ./debug 
   printf '%s)\n' "$1" >> ./debug; [ "$FILE" ] || printf '%s' "$1" >> state
   eval $(printf 'l%sc%s="%s"' "$3" "$2" "$1")
@@ -136,7 +161,7 @@ sgrid() { # print $1 # $3 l $2 c
 # L = lines; C = COLUMNS
 inlist() { # checks if $1 is in $2 returns ":" for yes; "!" for no
   case "$2" in
-    *"$1"*) echo ':' ;;
+    *"${1}"*) echo ':' ;;
     *) echo '!'
   esac
 }
@@ -157,8 +182,9 @@ listr() { # create a new typelist using the items in $2; MUST not contain $1
       }
     done
   }
-  [ "$l" -gt 3 -a "$ctypelist" = "$o" ] && {
-    printf 'listr failed to change typelist...\n' >> ./debug
+  [ "$ctypelist" = "$o" ] && {
+    printf 'listr failed to change typelist... | %s = %s | rm: %s \n' "$ctypelist" "$o" "$1" >> ./debug
+    exit 13
   }
   IFS="${oIFS}" # IFS should be set before calling
   # unset to prevent later issues
@@ -183,34 +209,42 @@ listSz(){ # list ($1) size; uses $2 as IFS or unset
   unset IFS
 }
 # if there are 4 items in $1/$typelist this will return `1`
-pos() { # $1 l $2 c
+pos() { # $1 l $2 c # case statements are present to replace spaces or unicode
   oIFS="${IFS}"; IFS=""
   if [ "$1" -eq 3 ]; then
     A=--
   else
-    [ "$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$2") 2>/dev/null)" = " " ] && {
-      A="b"
-    } || A="$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$2") 2>/dev/null)$A"
+    case "$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$2") 2>/dev/null)" in 
+      "${blank}") A="b" ;;
+      "${floor}") A="f" ;;
+      *) A="$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$2") 2>/dev/null)$A"
+    esac
     if [ "$1" -eq 4 ]; then
       A="${A}-"
     else 
-      [ "$(eval $(printf 'printf $l%sc%s' "$(($1-2))" "$2") 2>/dev/null)" = " " ] && {
-        A="${A}b"
-      } || A="$A$(eval $(printf 'printf $l%sc%s' "$(($1-2))" "$2") 2>/dev/null)"
+      case "$(eval $(printf 'printf $l%sc%s' "$(($1-2))" "$2") 2>/dev/null)" in 
+        "${blank}") A="${A}b" ;;
+        "${floor}") A="${A}f" ;;
+        *) A="$A$(eval $(printf 'printf $l%sc%s' "$(($1-2))" "$2") 2>/dev/null)"
+      esac
     fi
   fi
   if [ "$2" -eq 3 ]; then
     L=-- # - is placeholder
   else
-    [ "$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-1))") 2>/dev/null)" = " " ] && {
-      L="b" # replace ' ' (blank) with b
-    } || L="$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-1))") 2>/dev/null)"
+    case "$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-1))") 2>/dev/null)" in
+      "${blank}") L="b" ;; # replace ' ' (blank) with b
+      "${floor}") L="f" ;;
+      *) L="$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-1))") 2>/dev/null)"
+    esac
     if [ "$2" -eq 4 ]; then
       L="-${L}"
     else 
-      [ "$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-2))") 2>/dev/null)" = " " ] && {
-        L="b$L"
-      } || L="$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-2))") 2>/dev/null)$L"
+      case "$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-2))") 2>/dev/null)" in 
+        "${blank}") L="b$L" ;;
+        "${floor}") L="f$L" ;;
+        *) L="$(eval $(printf 'printf $l%sc%s' "$1" "$(($2-2))") 2>/dev/null)$L"
+      esac
     fi
   fi
   echo "$L $A"; IFS="${oIFS}"
@@ -220,16 +254,16 @@ dpos() { # diagonal pos # $1 l $2 c
   if [ "$1" -le 3 ]; then
     R=-; L=-
   else
-    [ "$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2+1))") 2>/dev/null)" = " " ] && {
-      R=b
-    } || {
-      R="$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2+1))") 2>/dev/null)"
-    }
-    [ "$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2-1))") 2>/dev/null)" = " " ] && {
-      L=b
-    } || {
-      L="$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2-1))") 2>/dev/null)"
-    }
+    case "$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2+1))") 2>/dev/null)" in
+      "${blank}") R=b ;;
+      "${floor}") R=f ;;
+      *) R="$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2+1))") 2>/dev/null)"
+    esac
+    case "$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2-1))") 2>/dev/null)" in 
+      "${blank}") L=b ;;
+      "${floor}") L=f ;;
+      *) L="$(eval $(printf 'printf $l%sc%s' "$(($1-1))" "$(($2-1))") 2>/dev/null)"
+    esac
   fi
   [ "$2" -le 3 ] && L=-
   echo "$L $R"; IFS="${oIFS}"
@@ -256,7 +290,7 @@ cont() { # continue reading from a state file -- given as $1 or `-` for STDIN
   while read -r p || [ -n "$p" ]; do
     c=3; vdpos="$(dpos $l $c)"; vpos="$(pos $l $c)"
     : $((l+=1)); [ "$l" -gt 3 ] && {
-      echo; c=1
+      echo; [ "$c" -eq $((COLUMNS-2)) ] || c=1
       bord; [ "$bord" ] && {
         printf '%s' "$bord"
         : $((c+=2))
@@ -287,7 +321,7 @@ bord() {
   esac
   case "$c" in
     '1'|$COLUMNS)
-      [ "$l" -eq 1 -o "$l" -eq $LINES ] || bord="$wall" ;;
+      [ "$l" -eq 1 -o "$l" -eq $LINES ] || bord="$swall" ;;
     '2'|"$((COLUMNS-1))")
       [ "$bord" ] || bord="$blank" ;;
     *) 
@@ -315,6 +349,7 @@ EOF
   esac
 }
 # POSITIONAL FUNCTIONS
+##D
 diapos() {
   case "$vdpos" in
     ?' +'|'+ '?|?' #')
@@ -323,31 +358,43 @@ diapos() {
       case "$vpos" in
         ?'b '??)
           typelist=$(listr "door" "${typelist}" ";")
-          typelist=$(listr "wall" "${typelist}" ";")
+          typelist=$(listr "swall" "${typelist}" ";")
       esac; : ;;
     ??'|')
       typelist=$(listr "corner" "${typelist}" ";")
   esac
+  case "$vdpos" in
+    ??'f'|'f'??)
+      case "$vpos" in
+        ??" b"?) inchance "corner" "4" ";"
+      esac
+  esac
 }
+##R
 roompos() {
   case "$vdpos $vpos" in
     ?' '?' '?'= '??|?????'b '??)
-      unset room ;;
-    '+ '?' '??' ='?|'= '?' '?'b '??|?' '?' '?"${floor} ="?|?' '?' '??" ${floor}"?|?" ${floor} "??' b'?|?" ${floor} "??' +'?|?" ${floor} "??' ='?|?' = '?"${floor} "??|?????"| ="?)
+      unset room 
+      case "$vpos" in
+        ??" f"?) room="true"
+      esac ;;
+    '+ '????' ='?|'+ '???'+ '??|'= '???'b '??|?????"f ="?|??????" f"?|?" f "??' b'?|?" f "??' +'?|?" f "??' ='?|?' = '?"f "??|?????"| ="?)
       room="true" ;;
     *)
       unset room
   esac
 }
+##B
 sidepos() {
   case "$vpos" in # ? is any /single/ char
-    "${floor}+ "??)
+    "f+ "??)
       typelist=$(listr "floor" "${typelist}" ";") && unset room
       typelist=$(listr "blank" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";") ;;
-    "#${floor} "??|"|${floor} "??|"+${floor} "??)
+    "#f "??|"|f "??|"+f "??)
+      typelist=$(listr "blank" "${typelist}" ";")
       typelist=$(listr "door" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";")
+      typelist=$(listr "swall" "${typelist}" ";")
       typelist=$(listr "topwall" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";") ;;
     "b| "??)
@@ -364,18 +411,18 @@ sidepos() {
       typelist=$(listr "door" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";")
       typelist=$(listr "blank" "${typelist}" ";") ;;
-    ?"b "??|?"${floor} "??|"${floor}${floor} "??)
+    ?"b "??|?"f "??|"ff "??)
       typelist=$(listr "topwall" "${typelist}" ";") ;;
     "=+ "??)
       inchance "blank" "3" ";"
       typelist=$(listr "door" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";") ;;
+      typelist=$(listr "swall" "${typelist}" ";") ;;
     ?"+ "??)
       typelist=$(listr "blank" "${typelist}" ";")
       typelist=$(listr "door" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";") 
+      typelist=$(listr "swall" "${typelist}" ";") 
       [ "$c" -eq $COLUMNS ] && {
         typelist=$(listr "topwall" "${typelist}" ";")
       } || : ;;
@@ -391,6 +438,7 @@ sidepos() {
           typelist=$(listr "corner" "${typelist}" ";")
         }
       }
+      typelist=$(listr "floor" "${typelist}" ";")
       inchance "topwall" "3" ";" ;; # increase the chance of topwall
     # topwall logic
     "b# "??)
@@ -399,92 +447,95 @@ sidepos() {
       typelist=$(listr "blank" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";")
       typelist=$(listr "topwall" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";") ;;
+      typelist=$(listr "swall" "${typelist}" ";") ;;
     ?"# "??|"#"?" "??)
       typelist=$(listr "door" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";") 
       typelist=$(listr "topwall" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";") ;;
+      typelist=$(listr "swall" "${typelist}" ";") ;;
     ?"- "??)
       typelist=$(listr "topwall" "${typelist}" ";")
   esac
 }
+##A
 apos() {
   case "$vpos" in
     ??" ++")
       typelist=$(listr "corner" "${typelist}" ";")
       typelist=$(listr "door" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";") ;;
+      typelist=$(listr "swall" "${typelist}" ";") ;;
     ??" #"?)
-      [ "${wallc:-0}" -lt $((MiL+1)) ] && {
+      [ "${swallc:-0}" -lt $((MiL+1)) ] && {
         typelist=$(listr "corner" "${typelist}" ";")
       } || inchance "corner" "2" ";"
-      [ "${wallc:-0}" -gt $ML ] && typelist=$(listr "wall" "${typelist}" ";")
+      [ "${swallc:-0}" -gt $ML ] && typelist=$(listr "swall" "${typelist}" ";")
         case "$vpos" in
-          ?"${floor} #+") typelist=$(listr "corner" "${typelist}" ";")
+          ??" #+") typelist=$(listr "corner" "${typelist}" ";")
         esac
         case "$vpos" in
           ?"b "??) : ;;
           *)
             typelist=$(listr "blank" "${typelist}" ";")
         esac
+        [ "$(inlist wall "${typelist}")" = ":" ] && inchance "swall" "4" ";"
         typelist=$(listr "topwall" "${typelist}" ";") ;;
     ??" |"?)
-      inchance "wall" "2" ";"
-      [ "${wallc:-0}" -lt $((MiL+1)) ] && {
+      inchance "swall" "2" ";"
+      [ "${swallc:-0}" -lt $((MiL+1)) ] && {
         typelist=$(listr "corner" "${typelist}" ";")
       }
-      [ "${wallc:-0}" -gt $ML ] && typelist=$(listr "wall" "${typelist}" ";")
+      [ "${swallc:-0}" -gt $ML ] && typelist=$(listr "swall" "${typelist}" ";")
       typelist=$(listr "topwall" "${typelist}" ";")
       typelist=$(listr "door" "${typelist}" ";")
-      case "$vpos" in
-        ?'b '??) : ;;
-        *) typelist=$(listr "blank" "${typelist}" ";")
-      esac ;;
+      typelist=$(listr "blank" "${typelist}" ";") ;;
     ??" bb")
       typelist=$(listr "door" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";") ;;
-    ??" ="?|??" ${floor}"?)
+      typelist=$(listr "swall" "${typelist}" ";") ;;
+    ??" ="?|??" f"?)
       case "$vpos" in
-        ??" ${floor}${floor}"|?"+ ${floor}${floor}"|"+= ${floor}${floor}"|"== ${floor}${floor}"|?"+ +${floor}"|"+= +${floor}"|"== +${floor}") : ;;
+        ??" ff"|?"+ ff"|"+= ff"|"== ff"|?"+ +f"|"+= +f"|"== +f") : ;;
         *)
           typelist=$(listr "corner" "${typelist}" ";")
           typelist=$(listr "topwall" "${typelist}" ";")
           inchance "blank" "2" ";"
       esac
-      typelist=$(listr "wall" "${typelist}" ";")
+      typelist=$(listr "swall" "${typelist}" ";")
       typelist=$(listr "door" "${typelist}" ";") 
       case "$vpos" in
-        ??" ${floor}"?) inchance "floor" "4" ";"
+        ?"+ =b") typelist=$(listr "blank" "${typelist}" ";")
+      esac
+      case "$vpos" in
+        ?"= "??) : ;;
+        ??" f"?) inchance "floor" "4" ";"
       esac ;;
     ??" b"?)
       typelist=$(listr "door" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";") ;;
+      typelist=$(listr "swall" "${typelist}" ";") ;;
     ??" +-"|??" +b")
       case "$vpos" in
-        '#'????|?'# '??|?'| '??) typelist=$(listr "wall" "${typelist}" ";") ;; # cannot be wall if wall is 2 blocks over 
-        ?"b "??|?"${floor} "??)
-          inchance "wall" "2" ";"
+        '#'????|?'# '??|?'| '??) typelist=$(listr "swall" "${typelist}" ";") ;; # cannot be wall if wall is 2 blocks over 
+        ?"b "??|?"f "??)
+          inchance "swall" "2" ";"
       esac
       typelist=$(listr "topwall" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";")
       typelist=$(listr "blank" "${typelist}" ";") ;;
     ??" +"?)
       case "$vpos" in
-        '#'????|?'# '??|?'| '??|"|${floor} "??) typelist=$(listr "wall" "${typelist}" ";") ;; # cannot be wall if wall is 2 blocks over 
-        ?"b "??|?"${floor} "??)
-          inchance "wall" "3" ";"
+        '#'????|?'# '??|?'| '??|"|f "??) typelist=$(listr "swall" "${typelist}" ";") ;; # cannot be wall if wall is 2 blocks over 
+        ?"b "??|?"f "??)
+          inchance "swall" "3" ";"
       esac
       typelist=$(listr "topwall" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";") ;;
     ??" ="?|??" b=")
       typelist=$(listr "topwall" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";")
+      typelist=$(listr "swall" "${typelist}" ";")
       typelist=$(listr "corner" "${typelist}" ";")
       typelist=$(listr "door" "${typelist}" ";") ;;
     ??" -"?)
       typelist=$(listr "door" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";")
+      typelist=$(listr "swall" "${typelist}" ";")
   esac
 }
 [ "$FILE" ] || :>./state 
@@ -500,16 +551,6 @@ ml=0; for l in $(s 1 $LINES); do # for each line
       printf '%s' "$bord"
       continue
     } # draw borders
-    [ "$c" -gt $((COLUMNS-6 -2)) ] && {
-      vpos="$(pos $l $c)"
-      case "$vpos" in
-        *'= '*)
-          sgrid "$corner" "$c" "$l" ;;
-        *)
-          printf '%s' "$blank"; printf '%s' "$blank" >> ./state
-      esac
-      continue
-    } # draw right side edge
 
     typelist=$(listr "floor" "${typelist}" ";")
     [ "$otypelist" ] && { 
@@ -534,7 +575,7 @@ ml=0; for l in $(s 1 $LINES); do # for each line
     # the list should be dynamic based on the pos and blocks around it
     # ie; placing a door when there is no where for it to lead makes no sense
     if [ "$l3c3" ]; then # counter logic is handled in sgrid() as items are handed off to it after being picked
-      printf 'start positional logic...\n' >> ./debug
+      #printf 'start positional logic...\n' >> ./debug
       # do logic if indexes are set
       vdpos="$(dpos $l $c)"
       vpos="$(pos $l $c)"
@@ -549,7 +590,7 @@ ml=0; for l in $(s 1 $LINES); do # for each line
       apos
       case "$vpos" in
         ?'= #'?|?'= |'?|?'= +'?|?'+ #'?|?'+ +'?)
-          typelist=$(listr "wall" "${typelist}" ";")
+          typelist=$(listr "swall" "${typelist}" ";")
           inchance "corner" "2" ";"
       esac
       ## DIAGONAL
@@ -558,21 +599,26 @@ ml=0; for l in $(s 1 $LINES); do # for each line
       ## FLOOR
       [ "$room" ] && {
         case "$vpos" in
-          ?"b =${floor}"|"${floor}# =${floor}") inchance "blank" "2" ";" ;;
+          ?"b =f"|"f# =f") inchance "blank" "2" ";" ;;
           *)
             typelist=$(listr "blank" "${typelist}" ";")
-            inchance "floor" "5" ";"
+            case "$vpos" in
+              ?"= "??) : ;;
+              *) inchance "floor" "5" ";"
+            esac
         esac
       } || typelist=$(listr "floor" "${typelist}" ";")
-      [ "$l" -gt 3 ] && { 
-        printf 'finished positional logic... checking for errors...\n' >> ./debug
-      }
+
+      #[ "$l" -gt 3 ] && { 
+      #  printf 'finished positional logic... checking for errors...\n' >> ./debug
+      #}
+
 
     else # below may run if last exit code is !0 and not handled
       typelist=$(listr "floor" "${typelist}" ";") 
       typelist=$(listr "door" "${typelist}" ";")
       typelist=$(listr "topwall" "${typelist}" ";")
-      typelist=$(listr "wall" "${typelist}" ";")
+      typelist=$(listr "swall" "${typelist}" ";")
       [ "$l" -gt 3 ] && {
         printf 'failed to preform positional logic... $l3c3 likely unset\n' >> ./debug
       }
