@@ -1,20 +1,28 @@
-----
-# rbr
+---
+rbr
 -- a room builder for the upcoming mia roguelike
-# Algorithm
+---
+Current Status
+-- rbr/miarl has been on pause for a long time as the existing drunkard walk style algorithm
+-- was really really draining to develop for
+-- and the sheer scope of all the libraries neededd eventually got to me
+-- however I plan to eventually breathe new life into miarl/rbr
+-- soon™ new libraries will be developed to replace or be integrated into rbr
+-- such as a binary space partitioning algorithm via a library
+-- and a secondary library for path building within the BSP generated rooms 
+---
+Algorithm
 -- rbr uses a drunkard walk style algorithm for its generation atm
 -- it should be noted that this algorithm is extremely slow in it's current form
 -- in the future i may attempt new algorithms but this works for now
---- http://pcg.wikidot.com/pcg-algorithm:drunkard-walk
-# caveats
--- generating a ""unique"" room requires some access to a PRNG (pseudorandom number generator)
--- building a pure software one would likely be a painful task in pure sh
--- as such this project uses `/dev/urandom` and some self made logic along with an edited LCG algorithm
--- to generate random numbers (see psh-prng)
-# exit codes
+---- http://pcg.wikidot.com/pcg-algorithm:drunkard-walk
+---
+Exit codes
 -- 10: generic rgrid errors
 -- 12: typelist errors
---- 13: empty $2 in listr()
-# notes
+---- 13: empty $2 in listr()
+---
+Notes
 -- a nerdfonts compatible font should be used
 -- please clone with `--recursive` as this project depends on the submods to operate
+---
