@@ -3,13 +3,11 @@ rbr
 -- a room builder for the upcoming mia roguelike
 ---
 Current Status
--- rbr/miarl has been on pause for a long time as the existing drunkard walk style algorithm
--- was really really draining to develop for
--- and the sheer scope of all the libraries neededd eventually got to me
--- however I plan to eventually breathe new life into miarl/rbr
--- soon™ new libraries will be developed to replace or be integrated into rbr
--- such as a binary space partitioning algorithm via a library
--- and a secondary library for path building within the BSP generated rooms 
+-- Abandoned; miarl to become Fragments
+-- Which will feature a new custom algorithm
+-- using on the fly generation of single chunk rooms
+---- Idea originally seen in Dead Estate
+---- go play that ;3
 ---
 Algorithm
 -- rbr uses a drunkard walk style algorithm for its generation atm
